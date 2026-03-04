@@ -7,6 +7,7 @@
   let newPassword = $state("");
   let confirmPassword = $state("");
   let showPasswords = $state(false);
+  let showEditForm = $state(false);
 
   const passwordMismatch = $derived(
     confirmPassword.length > 0 && newPassword !== confirmPassword
@@ -55,11 +56,30 @@
       </div>
     </div>
 
-    <!-- Editable Profile -->
-    <div class="bg-white p-5 sm:p-6 rounded-2xl shadow mb-4 sm:mb-6">
-      <h2 class="text-lg font-semibold text-gray-900 mb-4">Edit Profile</h2>
+    <!-- Edit Profile Toggle Button -->
+    {#if !showEditForm}
+      <button
+        onclick={() => (showEditForm = true)}
+        class="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-lg transition font-medium mb-4 sm:mb-6"
+      >
+        Edit Profile
+      </button>
+    {/if}
 
-      <form method="POST" action="?/update" class="space-y-4">
+    <!-- Editable Profile -->
+    {#if showEditForm}
+      <div class="bg-white p-5 sm:p-6 rounded-2xl shadow mb-4 sm:mb-6">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-lg font-semibold text-gray-900">Edit Profile</h2>
+          <button
+            onclick={() => (showEditForm = false)}
+            class="text-sm text-gray-500 hover:text-gray-700 font-medium"
+          >
+            Cancel
+          </button>
+        </div>
+
+        <form method="POST" action="?/update" class="space-y-4">
         <div>
           <label for="name" class="block text-sm font-medium text-gray-700 mb-1">
             Display Name
@@ -175,7 +195,8 @@
         >
           Save Changes
         </button>
-      </form>
-    </div>
+        </form>
+      </div>
+    {/if}
   </div>
 </div>

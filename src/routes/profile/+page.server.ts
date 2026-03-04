@@ -23,7 +23,6 @@ export const load: PageServerLoad = async (event) => {
 
   const hasOAuth = oauthAccounts.length > 0;
   const provider = hasOAuth ? oauthAccounts[0].provider : "credentials";
-  const isOAuth = hasOAuth && !user?.password;
 
   return {
     user: {
@@ -34,7 +33,7 @@ export const load: PageServerLoad = async (event) => {
       createdAt: user?.createdAt?.toISOString() ?? "",
     },
     provider,
-    isOAuth,
+    isOAuth: hasOAuth,
   };
 };
 
@@ -65,7 +64,7 @@ export const actions: Actions = {
       return fail(404, { error: "User not found." });
     }
 
-    const isOAuth = oauthAccounts.length > 0 && !user.password;
+    const isOAuth = oauthAccounts.length > 0;
 
     if (!isOAuth && !email) {
       return fail(400, { error: "Email is required." });
