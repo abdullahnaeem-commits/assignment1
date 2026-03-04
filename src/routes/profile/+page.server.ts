@@ -1,7 +1,7 @@
 import { redirect, fail } from "@sveltejs/kit";
 import type { PageServerLoad, Actions } from "./$types";
 import { db } from "$lib/db";
-import { users } from "$lib/schema";
+import { users, accounts } from "$lib/schema";
 import { eq } from "drizzle-orm";
 import bcrypt from "bcrypt";
 
@@ -16,7 +16,14 @@ export const load: PageServerLoad = async (event) => {
     where: eq(users.id, session.user.id!),
   });
 
-  const provider = (session as any).provider ?? "credentials";
+  // Check if user has OAuth accounts linked
+  const oauthAccounts = await db.query.accounts.findMany({
+    where: eq(accounts.userId, session.user.id!),
+  });
+
+  const hasOAuth = oauthAccounts.length > 0;
+  const provider = hasOAuth ? oauthAccounts[0].provider : "credentials";
+  const isOAuth = hasOAuth && !user?.password;
 
   return {
     user: {
@@ -27,7 +34,7 @@ export const load: PageServerLoad = async (event) => {
       createdAt: user?.createdAt?.toISOString() ?? "",
     },
     provider,
-    isOAuth: provider !== "credentials",
+    isOAuth,
   };
 };
 
@@ -45,22 +52,26 @@ export const actions: Actions = {
     const currentPassword = form.get("currentPassword") as string;
     const newPassword = form.get("newPassword") as string;
 
-    const provider = (session as any).provider ?? "credentials";
-    const isOAuth = provider !== "credentials";
+    // Check OAuth status from accounts table
+    const oauthAccounts = await db.query.accounts.findMany({
+      where: eq(accounts.userId, session.user.id!),
+    });
+
+    const user = await db.query.users.findFirst({
+      where: eq(users.id, session.user.id!),
+    });
+
+    if (!user) {
+      return fail(404, { error: "User not found." });
+    }
+
+    const isOAuth = oauthAccounts.length > 0 && !user.password;
 
     if (!isOAuth && !email) {
       return fail(400, { error: "Email is required." });
     }
 
     try {
-      const user = await db.query.users.findFirst({
-        where: eq(users.id, session.user.id!),
-      });
-
-      if (!user) {
-        return fail(404, { error: "User not found." });
-      }
-
       const updateData: Record<string, any> = { name };
 
       // Only allow email/password changes for credentials users
@@ -104,8 +115,7 @@ export const actions: Actions = {
         .where(eq(users.id, session.user.id!));
 
       return { success: true };
-    } catch (err) {
-
+    } catch {
       return fail(500, { error: "Failed to update profile." });
     }
   },

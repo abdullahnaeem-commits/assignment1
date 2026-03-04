@@ -1,5 +1,4 @@
 import { SvelteKitAuth } from "@auth/sveltekit";
-import Credentials from "@auth/core/providers/credentials";
 import Google from "@auth/core/providers/google";
 import GitHub from "@auth/core/providers/github";
 import { DrizzleAdapter } from "@auth/drizzle-adapter";
@@ -14,7 +13,6 @@ import {
 import { db } from "./db";
 import { users, accounts, sessions } from "./schema";
 import { eq } from "drizzle-orm";
-import bcrypt from "bcrypt";
 
 export const { handle, signIn, signOut } = SvelteKitAuth({
   adapter: DrizzleAdapter(db, {
@@ -35,88 +33,27 @@ export const { handle, signIn, signOut } = SvelteKitAuth({
       clientSecret: GITHUB_CLIENT_SECRET,
       allowDangerousEmailAccountLinking: true,
     }),
-
-    Credentials({
-      name: "credentials",
-      credentials: {
-        email: { label: "Email", type: "email" },
-        password: { label: "Password", type: "password" },
-      },
-
-      async authorize(credentials) {
-        const email = credentials?.email as string;
-        const password = credentials?.password as string;
-
-        if (!email || !password) return null;
-
-        const user = await db.query.users.findFirst({
-          where: eq(users.email, email),
-        });
-
-        if (!user || !user.password) return null;
-
-        const valid = await bcrypt.compare(password, user.password);
-        if (!valid) return null;
-
-        return {
-          id: user.id,
-          email: user.email,
-          name: user.name,
-          image: user.image,
-        };
-      },
-    }),
   ],
 
-  session: { strategy: "jwt" },
+  // Database sessions (default with adapter)
+  session: { strategy: "database" },
 
   pages: {
     signIn: "/login",
   },
 
   callbacks: {
-    async signIn({ user, account }) {
-      // Block unverified credentials users
-      if (account?.provider === "credentials" && user?.email) {
-        const dbUser = await db.query.users.findFirst({
-          where: eq(users.email, user.email),
-        });
-        if (dbUser && !dbUser.emailVerified) {
-          return "/login?error=EmailNotVerified";
-        }
-      }
-      return true;
-    },
-    async jwt({ token, user, account }) {
+    async session({ session, user }) {
       if (user) {
-        token.id = user.id;
-      }
-      if (account) {
-        token.provider = account.provider;
-      }
-      // Refresh user data from database so profile changes reflect immediately
-      if (token.id) {
+        session.user.id = user.id;
+
+        // Fetch role from database
         const dbUser = await db.query.users.findFirst({
-          where: eq(users.id, token.id as string),
+          where: eq(users.id, user.id),
         });
         if (dbUser) {
-          token.name = dbUser.name;
-          token.email = dbUser.email;
-          token.picture = dbUser.image;
-          token.role = dbUser.role;
+          (session as any).role = dbUser.role;
         }
-      }
-      return token;
-    },
-    async session({ session, token }) {
-      if (token?.id) {
-        session.user.id = token.id as string;
-      }
-      if (token?.provider) {
-        (session as any).provider = token.provider as string;
-      }
-      if (token?.role) {
-        (session as any).role = token.role as string;
       }
       return session;
     },
